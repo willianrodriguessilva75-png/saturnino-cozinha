@@ -2,11 +2,13 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Saturnino Pizzaria - Controle de Produção</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Saturnino Pizzaria - Controle</title>
     
     <!-- PWA Manifest & Meta Tags -->
     <meta name="theme-color" content="#d97706">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlNhdHVybmlubyBQaXp6YXJpYSIsCiAgInNob3J0X25hbWUiOiAiU2F0dXJuaW5vIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiNmZmZmZmYiLAogICJ0aGVtZV9jb2xvciIjogIiNkOTc3MDYiLAogICJpY29ucyI6IFt7CiAgICAic3JjIjogImh0dHBzOi8vY2RuLWljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzcwNi83MDY5MzQucG5nIiwKICAgICJzaXplcyI6ICI1MTJ4NTEyIiwKICAgICJ0eXBlIjogImltYWdlL3BuZyIKICB9XQp9">
     
     <!-- Estilos (Tailwind CSS) -->
@@ -22,159 +24,171 @@
         .loader { border-top-color: #d97706; -webkit-animation: spinner 1.5s linear infinite; animation: spinner 1.5s linear infinite; }
         @-webkit-keyframes spinner { 0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); } }
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Fix para iOS inputs */
+        input, select, textarea { font-size: 16px !important; }
     </style>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans pb-20">
+<body class="bg-gray-100 text-gray-800 font-sans pb-24 select-none">
 
     <!-- Cabeçalho -->
     <header class="bg-yellow-600 text-white p-4 shadow-md sticky top-0 z-50">
         <div class="flex justify-between items-center">
             <h1 class="text-xl font-bold flex items-center gap-2">
-                <i data-lucide="pizza"></i> Saturnino Pizzaria
+                <i data-lucide="pizza"></i> Saturnino
             </h1>
-            <button onclick="mostrarConfig()" class="p-2"><i data-lucide="settings"></i></button>
+            <button onclick="mostrarConfig()" class="p-2 active:scale-95 transition-transform"><i data-lucide="settings"></i></button>
         </div>
-        <div id="colaborador-display" class="text-sm mt-1 opacity-90">Selecione um colaborador</div>
+        <div id="colaborador-display" class="text-sm mt-1 opacity-90 font-medium">Selecione um colaborador</div>
     </header>
 
     <!-- Tela Principal -->
     <main class="p-4 max-w-md mx-auto">
         
-        <!-- Botão de Câmera -->
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-6 text-center border-2 border-dashed border-yellow-500">
-            <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" onchange="processarImagem(this)">
-            <label for="cameraInput" class="cursor-pointer flex flex-col items-center gap-3">
+        <!-- Botão de Câmera (CORRIGIDO) -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6 text-center border-2 border-dashed border-yellow-500 relative active:bg-yellow-50 transition-colors">
+            
+            <!-- TRUQUE: Input invisível mas presente no DOM (não use class hidden) -->
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" 
+                   style="opacity: 0; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; cursor: pointer;" 
+                   onchange="processarImagem(this)">
+
+            <div class="flex flex-col items-center gap-3 pointer-events-none">
                 <div class="bg-yellow-100 p-4 rounded-full text-yellow-600">
                     <i data-lucide="camera" size="48"></i>
                 </div>
                 <span class="font-bold text-lg">Escanear Comanda</span>
-                <p class="text-xs text-gray-500">Fotografe para Iniciar ou Finalizar</p>
-            </label>
+                <p class="text-xs text-gray-500">Toque aqui para fotografar</p>
+            </div>
         </div>
 
         <!-- Status de Processamento -->
-        <div id="status-ocr" class="hidden mb-4 p-4 bg-blue-100 rounded-lg text-center">
+        <div id="status-ocr" class="hidden mb-4 p-4 bg-blue-100 rounded-lg text-center border border-blue-200">
             <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 mb-2 mx-auto"></div>
-            <p class="text-sm text-blue-800 font-semibold" id="status-texto">Lendo comanda...</p>
+            <p class="text-sm text-blue-800 font-bold animate-pulse" id="status-texto">Lendo comanda...</p>
         </div>
 
         <!-- Lista de Pedidos em Produção -->
-        <h2 class="font-bold text-gray-700 mb-2 flex items-center gap-2">
-            <i data-lucide="flame"></i> Em Produção
+        <h2 class="font-bold text-gray-700 mb-2 flex items-center gap-2 px-1">
+            <i data-lucide="flame" class="text-orange-500"></i> Em Produção
         </h2>
-        <div id="lista-producao" class="space-y-3 mb-8">
+        <div id="lista-producao" class="space-y-3 mb-8 min-h-[100px]">
             <!-- Itens inseridos via JS -->
-            <p class="text-center text-gray-400 text-sm py-4">Nenhum pedido no forno.</p>
+            <p class="text-center text-gray-400 text-sm py-8 bg-white rounded-lg shadow-sm">Nenhum pedido no forno.</p>
         </div>
 
     </main>
 
     <!-- Modal de Detalhes do Pedido -->
-    <div id="modal-pedido" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg w-full max-w-md p-5 overflow-y-auto max-h-[90vh]">
-            <h3 class="text-lg font-bold mb-4" id="modal-titulo">Confirmar Dados</h3>
+    <div id="modal-pedido" class="fixed inset-0 bg-black bg-opacity-60 hidden z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl w-full max-w-md p-5 shadow-2xl transform transition-all scale-100">
+            <h3 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2" id="modal-titulo">Confirmar Dados</h3>
             
             <form id="form-pedido" onsubmit="salvarPedido(event)">
                 <input type="hidden" id="pedido-id-interno">
-                <input type="hidden" id="pedido-acao"> <!-- start ou stop -->
+                <input type="hidden" id="pedido-acao">
 
-                <div class="grid gap-3 mb-4">
+                <div class="grid gap-4 mb-6">
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase">Nº Pedido</label>
-                        <input type="number" id="inp-numero" class="w-full border p-2 rounded" required>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nº Pedido</label>
+                        <input type="tel" id="inp-numero" class="w-full border-2 border-gray-200 p-3 rounded-lg text-lg font-bold focus:border-yellow-500 outline-none" placeholder="1234" required>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Sabor</label>
+                            <input type="text" id="inp-sabor" class="w-full border p-2 rounded-lg" placeholder="Ex: Calabresa" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tamanho</label>
+                            <select id="inp-tamanho" class="w-full border p-2 rounded-lg bg-white">
+                                <option value="Grande">Grande</option>
+                                <option value="Média">Média</option>
+                                <option value="Pequena">Pequena</option>
+                                <option value="Gigante">Gigante</option>
+                                <option value="Broto">Broto</option>
+                            </select>
+                        </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase">Sabor</label>
-                        <input type="text" id="inp-sabor" class="w-full border p-2 rounded" placeholder="Ex: Calabresa" required>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase">Tamanho</label>
-                        <select id="inp-tamanho" class="w-full border p-2 rounded">
-                            <option value="Grande">Grande</option>
-                            <option value="Média">Média</option>
-                            <option value="Pequena">Pequena</option>
-                            <option value="Gigante">Gigante</option>
-                            <option value="Broto">Broto</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase">Ocorrências (Opcional)</label>
-                        <textarea id="inp-ocorrencia" class="w-full border p-2 rounded" rows="2" placeholder="Ex: Borda queimada, atraso motoboy"></textarea>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Ocorrências (Opcional)</label>
+                        <textarea id="inp-ocorrencia" class="w-full border p-2 rounded-lg text-sm" rows="2" placeholder="Ex: Atraso, Borda queimada..."></textarea>
                     </div>
                 </div>
 
-                <div class="flex gap-2">
-                    <button type="button" onclick="fecharModal('modal-pedido')" class="flex-1 bg-gray-300 text-gray-700 p-2 rounded">Cancelar</button>
-                    <button type="submit" class="flex-1 bg-yellow-600 text-white p-2 rounded font-bold">Confirmar</button>
+                <div class="flex gap-3">
+                    <button type="button" onclick="fecharModal('modal-pedido')" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300">Cancelar</button>
+                    <button type="submit" class="flex-1 bg-yellow-600 text-white py-3 rounded-lg font-bold shadow-md hover:bg-yellow-700">Confirmar</button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- Modal Configurações/Relatórios -->
-    <div id="modal-config" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-end sm:items-center justify-center">
-        <div class="bg-white rounded-t-xl sm:rounded-xl w-full max-w-md p-5 h-[80vh] overflow-y-auto">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold">Menu & Relatórios</h3>
-                <button onclick="fecharModal('modal-config')"><i data-lucide="x"></i></button>
+    <div id="modal-config" class="fixed inset-0 bg-black bg-opacity-60 hidden z-[60] flex items-end sm:items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-t-2xl sm:rounded-xl w-full max-w-md p-6 h-[85vh] sm:h-auto overflow-y-auto shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-gray-800">Menu & Relatórios</h3>
+                <button onclick="fecharModal('modal-config')" class="bg-gray-100 p-2 rounded-full"><i data-lucide="x"></i></button>
             </div>
 
-            <div class="mb-6">
-                <label class="block text-sm font-bold mb-1">Colaborador Atual</label>
-                <select id="select-colaborador" class="w-full border p-2 rounded mb-2" onchange="mudarColaborador()">
-                    <option value="">Selecione...</option>
-                </select>
+            <div class="mb-6 bg-gray-50 p-4 rounded-lg border">
+                <label class="block text-sm font-bold mb-2 text-gray-600">Quem está usando?</label>
+                <div class="flex gap-2 mb-2">
+                    <select id="select-colaborador" class="w-full border p-2 rounded-lg bg-white" onchange="mudarColaborador()">
+                        <option value="">Selecione...</option>
+                    </select>
+                </div>
                 <div class="flex gap-2">
-                    <input type="text" id="novo-colaborador" placeholder="Novo nome" class="border p-2 rounded flex-1 text-sm">
-                    <button onclick="addColaborador()" class="bg-green-600 text-white px-3 rounded text-sm">Add</button>
+                    <input type="text" id="novo-colaborador" placeholder="Novo nome" class="border p-2 rounded-lg flex-1 text-sm">
+                    <button onclick="addColaborador()" class="bg-green-600 text-white px-4 rounded-lg text-sm font-bold">Add</button>
                 </div>
             </div>
 
-            <hr class="my-4">
+            <hr class="my-4 border-gray-200">
 
-            <div class="mb-6">
-                <h4 class="font-bold mb-2">Relatório do Dia</h4>
-                <div class="grid grid-cols-2 gap-2 text-center mb-4">
-                    <div class="bg-gray-100 p-2 rounded">
-                        <span class="block text-2xl font-bold text-yellow-600" id="rel-total">0</span>
-                        <span class="text-xs text-gray-500">Pizzas</span>
+            <div>
+                <h4 class="font-bold mb-3 flex items-center gap-2"><i data-lucide="bar-chart"></i> Relatório do Dia</h4>
+                <div class="grid grid-cols-2 gap-3 text-center mb-4">
+                    <div class="bg-yellow-50 p-3 rounded-xl border border-yellow-100">
+                        <span class="block text-3xl font-bold text-yellow-600" id="rel-total">0</span>
+                        <span class="text-xs text-gray-500 font-bold uppercase">Pizzas Hoje</span>
                     </div>
-                    <div class="bg-gray-100 p-2 rounded">
-                        <span class="block text-2xl font-bold text-blue-600" id="rel-media">0m</span>
-                        <span class="text-xs text-gray-500">Tempo Médio</span>
+                    <div class="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                        <span class="block text-3xl font-bold text-blue-600" id="rel-media">0m</span>
+                        <span class="text-xs text-gray-500 font-bold uppercase">Tempo Médio</span>
                     </div>
                 </div>
                 
-                <h5 class="text-sm font-bold mb-1">Histórico Recente</h5>
-                <ul id="lista-historico" class="text-xs space-y-1 mb-4 max-h-40 overflow-y-auto">
+                <h5 class="text-xs font-bold text-gray-400 uppercase mb-2">Últimos Pedidos Finalizados</h5>
+                <ul id="lista-historico" class="text-sm space-y-2 mb-6 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded border">
                     <!-- Histórico -->
+                    <li class="text-center text-gray-400 text-xs">Nenhum pedido finalizado hoje.</li>
                 </ul>
 
-                <button onclick="enviarWhatsapp()" class="w-full bg-green-500 hover:bg-green-600 text-white p-3 rounded-lg flex items-center justify-center gap-2 font-bold shadow">
-                    <i data-lucide="message-circle"></i> Enviar Relatório WhatsApp
+                <button onclick="enviarWhatsapp()" class="w-full bg-green-500 active:bg-green-600 text-white p-4 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg transition-colors">
+                    <i data-lucide="message-circle"></i> Enviar no WhatsApp
                 </button>
                 
-                <button onclick="limparDados()" class="mt-4 text-red-500 text-xs underline w-full text-center">Limpar todos os dados</button>
+                <button onclick="limparDados()" class="mt-6 text-red-500 text-xs w-full text-center py-2 border border-red-100 rounded hover:bg-red-50">Limpar histórico do aparelho</button>
             </div>
         </div>
     </div>
 
     <!-- Barra de Navegação Inferior -->
-    <nav class="fixed bottom-0 w-full bg-white border-t border-gray-200 flex justify-around p-3 z-40">
-        <button onclick="fecharModal('modal-config')" class="text-yellow-600 flex flex-col items-center">
+    <nav class="fixed bottom-0 w-full bg-white border-t border-gray-200 flex justify-around p-2 z-40 pb-safe">
+        <button onclick="fecharModal('modal-config')" class="text-yellow-600 flex flex-col items-center p-2 flex-1 active:bg-gray-50">
             <i data-lucide="home"></i>
-            <span class="text-xs">Início</span>
+            <span class="text-[10px] font-bold mt-1">Produção</span>
         </button>
-        <button onclick="mostrarConfig()" class="text-gray-500 flex flex-col items-center">
+        <button onclick="mostrarConfig()" class="text-gray-400 flex flex-col items-center p-2 flex-1 active:bg-gray-50 hover:text-gray-600">
             <i data-lucide="bar-chart-2"></i>
-            <span class="text-xs">Relatórios</span>
+            <span class="text-[10px] font-bold mt-1">Relatórios</span>
         </button>
     </nav>
 
     <script>
         // --- 1. Estado e Inicialização ---
         let db = {
-            colaboradores: JSON.parse(localStorage.getItem('saturnino_colaboradores')) || ['João', 'Maria', 'Pizzaiolo Chefe'],
+            colaboradores: JSON.parse(localStorage.getItem('saturnino_colaboradores')) || ['Pizzaiolo 1', 'Pizzaiolo 2'],
             pedidosEmAndamento: JSON.parse(localStorage.getItem('saturnino_andamento')) || [],
             historico: JSON.parse(localStorage.getItem('saturnino_historico')) || [],
             colaboradorAtual: localStorage.getItem('saturnino_atual') || ''
@@ -187,9 +201,9 @@
         // --- 2. Funções de OCR e Processamento ---
         async function processarImagem(input) {
             if (!db.colaboradorAtual) {
-                alert("Por favor, selecione o colaborador no menu antes de começar.");
-                input.value = ""; // Reset
+                alert("⚠️ Selecione quem está produzindo antes de começar!");
                 mostrarConfig();
+                input.value = ""; 
                 return;
             }
 
@@ -198,21 +212,18 @@
 
             // UI Loading
             document.getElementById('status-ocr').classList.remove('hidden');
-            document.getElementById('status-texto').innerText = "Processando imagem... Isso pode levar alguns segundos.";
+            document.getElementById('status-texto').innerText = "Processando imagem...";
 
             try {
-                // Tesseract OCR
                 const worker = await Tesseract.createWorker('por');
                 const ret = await worker.recognize(file);
                 await worker.terminate();
                 
                 const textoExtraido = ret.data.text;
-                console.log("Texto OCR:", textoExtraido);
-
-                // Lógica de Extração (Regex Simples)
-                // Tenta achar "Pedido 1234" ou "#1234" ou apenas números grandes isolados
+                
+                // Regex melhorado para comandas
                 let numeroPedido = extrairNumeroPedido(textoExtraido);
-                let sabor = extrairSabor(textoExtraido); // Muito difícil ser preciso, mas tentaremos
+                let sabor = ""; 
                 let tamanho = extrairTamanho(textoExtraido);
 
                 // Verifica se é START ou STOP
@@ -222,21 +233,23 @@
 
             } catch (err) {
                 console.error(err);
-                alert("Erro ao ler imagem. Tente novamente ou digite manualmente.");
-                abrirModalConfirmacao(-1, "", "", ""); // Abre vazio para manual
+                alert("Não foi possível ler a imagem. Digite manualmente.");
+                abrirModalConfirmacao(-1, "", "", ""); 
             } finally {
                 document.getElementById('status-ocr').classList.add('hidden');
-                input.value = ""; // Reset input
+                input.value = ""; // Reset input para permitir nova foto igual
             }
         }
 
         function extrairNumeroPedido(texto) {
-            // Procura padrões comuns em tickets: "Pedido: 123", "Senha: 123", "#123"
-            const regex = /(?:pedido|senha|cupom|nº|#)\s*:?\s*(\d+)/i;
+            // Remove espaços extras
+            texto = texto.replace(/\s+/g, ' ');
+            // Tenta achar padrões: "Pedido 1234", "#1234", "Senha 1234"
+            const regex = /(?:pedido|senha|cupom|nº|#)[:\s]*(\d{3,5})/i;
             const match = texto.match(regex);
             if (match) return match[1];
             
-            // Fallback: Procura o primeiro número de 3 a 5 dígitos isolado
+            // Fallback: Primeiro número grande isolado
             const regexNum = /\b\d{3,5}\b/;
             const matchNum = texto.match(regexNum);
             return matchNum ? matchNum[0] : "";
@@ -249,13 +262,7 @@
             if (texto.includes("med") || texto.includes("méd")) return "Média";
             if (texto.includes("peq")) return "Pequena";
             if (texto.includes("bro")) return "Broto";
-            return "Grande"; // Padrão
-        }
-
-        function extrairSabor(texto) {
-            // Simplificado: Pega a linha após "Produto" ou tenta chutar. 
-            // OCR de sabor é complexo sem IA treinada, deixamos o usuário corrigir.
-            return ""; 
+            return "Grande";
         }
 
         // --- 3. Lógica de UI (Modais e Formulários) ---
@@ -270,22 +277,21 @@
             inpSabor.value = sabor || '';
             if(tamanho) inpTam.value = tamanho;
 
-            document.getElementById('pedido-id-interno').value = indexExistente; // -1 se novo
+            document.getElementById('pedido-id-interno').value = indexExistente;
 
             if (indexExistente > -1) {
-                // Finalizar
-                titulo.innerText = "Finalizar Pedido (Conferência)";
+                titulo.innerText = "✅ Finalizar Pedido";
                 document.getElementById('pedido-acao').value = 'stop';
-                // Preenche dados salvos anteriormente para facilitar
                 const dadosSalvos = db.pedidosEmAndamento[indexExistente];
                 inpSabor.value = dadosSalvos.sabor;
                 inpTam.value = dadosSalvos.tamanho;
-                inpNum.readOnly = true; // Não muda o número no checkout
+                inpNum.readOnly = true; 
+                inpNum.classList.add('bg-gray-100');
             } else {
-                // Iniciar
-                titulo.innerText = "Iniciar Produção";
+                titulo.innerText = "🔥 Iniciar Produção";
                 document.getElementById('pedido-acao').value = 'start';
                 inpNum.readOnly = false;
+                inpNum.classList.remove('bg-gray-100');
             }
 
             modal.classList.remove('hidden');
@@ -307,7 +313,12 @@
             const agora = new Date();
 
             if (acao === 'start') {
-                // Cria novo registro
+                const duplicado = db.pedidosEmAndamento.find(p => p.numero == numero);
+                if(duplicado) {
+                    alert("Esse pedido já está em produção!");
+                    return;
+                }
+
                 const novoPedido = {
                     numero,
                     sabor,
@@ -318,20 +329,18 @@
                 };
                 db.pedidosEmAndamento.push(novoPedido);
             } else {
-                // Finaliza registro
                 const pedido = db.pedidosEmAndamento[index];
                 const inicio = new Date(pedido.inicio);
-                const diffMs = agora - inicio; // Diferença em milisegundos
+                const diffMs = agora - inicio; 
                 const diffMin = Math.round(diffMs / 60000);
 
                 const finalizado = {
                     ...pedido,
                     fim: agora.toISOString(),
-                    duracaoMinutos: diffMin,
-                    ocorrencia: ocorrencia || pedido.ocorrencia // Atualiza ocorrencia se tiver nova
+                    duracaoMinutos: diffMin || 1, // Mínimo 1 min
+                    ocorrencia: ocorrencia ? (pedido.ocorrencia ? pedido.ocorrencia + " | " + ocorrencia : ocorrencia) : pedido.ocorrencia
                 };
 
-                // Move para histórico
                 db.historico.push(finalizado);
                 db.pedidosEmAndamento.splice(index, 1);
             }
@@ -351,35 +360,32 @@
         }
 
         function atualizarUI() {
-            // Atualiza Header
             const displayColab = document.getElementById('colaborador-display');
-            displayColab.innerText = db.colaboradorAtual ? `Olá, ${db.colaboradorAtual}` : 'Selecione um colaborador';
+            displayColab.innerText = db.colaboradorAtual ? `Olá, ${db.colaboradorAtual}` : 'Toque na engrenagem para entrar';
             
-            // Lista Em Produção
             const lista = document.getElementById('lista-producao');
             lista.innerHTML = '';
             
             if (db.pedidosEmAndamento.length === 0) {
-                lista.innerHTML = '<p class="text-center text-gray-400 text-sm py-4">Nenhum pedido no forno.</p>';
+                lista.innerHTML = '<div class="text-center text-gray-400 text-sm py-8 bg-white rounded-lg border border-gray-100 shadow-sm flex flex-col items-center gap-2"><i data-lucide="chef-hat"></i><span>Nenhum pedido no forno.</span></div>';
             } else {
                 db.pedidosEmAndamento.forEach(p => {
                     const horaInicio = dayjs(p.inicio).format('HH:mm');
                     lista.innerHTML += `
-                        <div class="bg-white p-4 rounded-lg shadow border-l-4 border-yellow-500 flex justify-between items-center">
-                            <div>
-                                <span class="font-bold text-lg">#${p.numero}</span>
-                                <p class="text-sm text-gray-600">${p.sabor} (${p.tamanho})</p>
-                                <p class="text-xs text-gray-400">Iniciado às ${horaInicio} por ${p.colaborador}</p>
+                        <div class="bg-white p-4 rounded-lg shadow-md border-l-4 border-yellow-500 flex justify-between items-center relative overflow-hidden">
+                            <div class="z-10">
+                                <span class="font-black text-xl text-gray-800">#${p.numero}</span>
+                                <p class="text-sm font-bold text-gray-600">${p.sabor}</p>
+                                <p class="text-xs text-gray-400 mt-1">${p.tamanho} • ${horaInicio} • ${p.colaborador}</p>
                             </div>
-                            <div class="text-yellow-600 font-bold animate-pulse">
-                                Assando
+                            <div class="text-orange-500 bg-orange-50 px-3 py-1 rounded-full text-xs font-bold animate-pulse flex items-center gap-1">
+                                <i data-lucide="flame" size="14"></i> Assando
                             </div>
                         </div>
                     `;
                 });
             }
-
-            // Atualiza Relatórios na Modal
+            lucide.createIcons();
             atualizarRelatorios();
         }
 
@@ -388,7 +394,6 @@
             const modal = document.getElementById('modal-config');
             const select = document.getElementById('select-colaborador');
             
-            // Popula select
             select.innerHTML = '<option value="">Selecione...</option>';
             db.colaboradores.forEach(c => {
                 select.innerHTML += `<option value="${c}" ${c === db.colaboradorAtual ? 'selected' : ''}>${c}</option>`;
@@ -411,12 +416,11 @@
                 db.colaboradores.push(nome);
                 document.getElementById('novo-colaborador').value = '';
                 salvarBanco();
-                mostrarConfig(); // recarrega lista
+                mostrarConfig(); 
             }
         }
 
         function atualizarRelatorios() {
-            // Filtra histórico de hoje
             const hoje = dayjs().format('YYYY-MM-DD');
             const historicoHoje = db.historico.filter(p => dayjs(p.fim).format('YYYY-MM-DD') === hoje);
 
@@ -426,24 +430,38 @@
             const listaHist = document.getElementById('lista-historico');
             listaHist.innerHTML = '';
 
-            historicoHoje.forEach(p => {
-                somaTempo += p.duracaoMinutos;
-                listaHist.innerHTML += `
-                    <li class="border-b py-1 flex justify-between">
-                        <span>#${p.numero} - ${p.sabor}</span>
-                        <span class="font-bold">${p.duracaoMinutos} min</span>
-                    </li>
-                `;
-            });
+            if(historicoHoje.length === 0) {
+                 listaHist.innerHTML = '<li class="text-center text-gray-400 text-xs py-2">Nenhum pedido finalizado hoje.</li>';
+            } else {
+                // Mostra os últimos 5
+                historicoHoje.slice().reverse().forEach(p => {
+                    somaTempo += p.duracaoMinutos;
+                    listaHist.innerHTML += `
+                        <li class="border-b border-gray-100 py-2 flex justify-between items-center last:border-0">
+                            <div>
+                                <span class="block font-bold text-gray-700">#${p.numero} - ${p.sabor}</span>
+                                <span class="text-[10px] text-gray-400">${dayjs(p.fim).format('HH:mm')} • ${p.colaborador}</span>
+                            </div>
+                            <span class="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs">${p.duracaoMinutos} min</span>
+                        </li>
+                    `;
+                });
+            }
 
             const media = historicoHoje.length ? Math.round(somaTempo / historicoHoje.length) : 0;
             document.getElementById('rel-media').innerText = media + 'm';
         }
 
         function enviarWhatsapp() {
-            const hoje = dayjs().format('DD/MM/YYYY');
-            const historicoHoje = db.historico.filter(p => dayjs(p.fim).format('YYYY-MM-DD') === dayjs().format('YYYY-MM-DD'));
+            const hojeFormatado = dayjs().format('DD/MM/YYYY');
+            const hojeISO = dayjs().format('YYYY-MM-DD');
+            const historicoHoje = db.historico.filter(p => dayjs(p.fim).format('YYYY-MM-DD') === hojeISO);
             
+            if(historicoHoje.length === 0) {
+                alert("Nenhum dado para enviar hoje.");
+                return;
+            }
+
             let total = historicoHoje.length;
             let somaTempo = 0;
             let ocorrencias = [];
@@ -451,7 +469,7 @@
 
             historicoHoje.forEach(p => {
                 somaTempo += p.duracaoMinutos;
-                if(p.ocorrencia) ocorrencias.push(`Ped #${p.numero}: ${p.ocorrencia}`);
+                if(p.ocorrencia) ocorrencias.push(`⚠️ Ped #${p.numero}: ${p.ocorrencia}`);
                 
                 if(!sabores[p.sabor]) sabores[p.sabor] = 0;
                 sabores[p.sabor]++;
@@ -459,28 +477,31 @@
 
             const media = total ? Math.round(somaTempo / total) : 0;
 
-            // Formata Texto
-            let msg = `*Relatório Saturnino Pizzaria - ${hoje}*\n`;
+            let msg = `🍕 *RELATÓRIO SATURNINO - ${hojeFormatado}* 🍕\n\n`;
+            msg += `📊 *Resumo:*\n`;
+            msg += `✅ Total Produzido: *${total} pizzas*\n`;
+            msg += `⏱️ Tempo Médio: *${media} min*\n`;
             msg += `--------------------------------\n`;
-            msg += `🍕 *Total Produzido:* ${total}\n`;
-            msg += `⏱️ *Tempo Médio:* ${media} min\n\n`;
             
-            msg += `*Por Sabor:*\n`;
+            msg += `📋 *Por Sabor:*\n`;
             for (const [sab, qtd] of Object.entries(sabores)) {
-                msg += `- ${sab}: ${qtd}\n`;
+                msg += `• ${sab}: ${qtd}\n`;
             }
 
             if(ocorrencias.length > 0) {
-                msg += `\n⚠️ *Ocorrências:*\n`;
+                msg += `\n--------------------------------\n`;
+                msg += `🚨 *Ocorrências:*\n`;
                 msg += ocorrencias.join('\n');
             }
+
+            msg += `\n_Gerado pelo App Saturnino_`;
 
             const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
             window.open(url, '_blank');
         }
         
         function limparDados() {
-            if(confirm("Tem certeza? Isso apagará todo o histórico.")) {
+            if(confirm("ATENÇÃO: Isso apagará todo o histórico deste celular. Deseja continuar?")) {
                 localStorage.clear();
                 location.reload();
             }
