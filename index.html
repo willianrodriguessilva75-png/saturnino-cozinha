@@ -3,51 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Saturnino Pizzaria - Controle</title>
+    <title>Saturnino - Controle Pro</title>
     
-    <!-- PWA Manifest & Meta Tags -->
     <meta name="theme-color" content="#d97706">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlNhdHVybmlubyBQaXp6YXJpYSIsCiAgInNob3J0X25hbWUiOiAiU2F0dXJuaW5vIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiNmZmZmZmYiLAogICJ0aGVtZV9jb2xvciIjogIiNkOTc3MDYiLAogICJpY29ucyI6IFt7CiAgICAic3JjIjogImh0dHBzOi8vY2RuLWljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzcwNi83MDY5MzQucG5nIiwKICAgICJzaXplcyI6ICI1MTJ4NTEyIiwKICAgICJ0eXBlIjogImltYWdlL3BuZyIKICB9XQp9">
     
-    <!-- Estilos (Tailwind CSS) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Ícones -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- OCR Engine -->
     <script src='https://unpkg.com/tesseract.js@v4.1.1/dist/tesseract.min.js'></script>
-    <!-- Biblioteca de Tempo (Day.js) -->
     <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
 
     <style>
-        .loader { border-top-color: #d97706; -webkit-animation: spinner 1.5s linear infinite; animation: spinner 1.5s linear infinite; }
-        @-webkit-keyframes spinner { 0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); } }
+        /* Animação de carregamento */
+        .loader { border-top-color: #d97706; animation: spinner 1s linear infinite; }
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        /* Fix para iOS inputs */
-        input, select, textarea { font-size: 16px !important; }
+        /* Melhorar toque no mobile */
+        input, select, textarea { font-size: 16px !important; } 
+        .touch-target { min-height: 44px; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans pb-24 select-none">
 
-    <!-- Cabeçalho -->
-    <header class="bg-yellow-600 text-white p-4 shadow-md sticky top-0 z-50">
-        <div class="flex justify-between items-center">
+    <!-- Header -->
+    <header class="bg-yellow-600 text-white p-4 shadow-md sticky top-0 z-50 flex justify-between items-center">
+        <div>
             <h1 class="text-xl font-bold flex items-center gap-2">
                 <i data-lucide="pizza"></i> Saturnino
             </h1>
-            <button onclick="mostrarConfig()" class="p-2 active:scale-95 transition-transform"><i data-lucide="settings"></i></button>
+            <div id="colaborador-display" class="text-xs opacity-90 font-medium mt-1">Selecione um colaborador</div>
         </div>
-        <div id="colaborador-display" class="text-sm mt-1 opacity-90 font-medium">Selecione um colaborador</div>
+        <button onclick="mostrarConfig()" class="p-2 bg-yellow-700 rounded-lg active:scale-95 transition">
+            <i data-lucide="settings"></i>
+        </button>
     </header>
 
-    <!-- Tela Principal -->
+    <!-- Canvas Invisível para Processamento de Imagem (Filtro) -->
+    <canvas id="canvas-ocr" class="hidden"></canvas>
+
+    <!-- Main -->
     <main class="p-4 max-w-md mx-auto">
         
-        <!-- Botão de Câmera (CORRIGIDO) -->
+        <!-- Botão Câmera -->
         <div class="bg-white rounded-xl shadow-lg p-6 mb-6 text-center border-2 border-dashed border-yellow-500 relative active:bg-yellow-50 transition-colors">
-            
-            <!-- TRUQUE: Input invisível mas presente no DOM (não use class hidden) -->
+            <!-- Input invisível que cobre tudo -->
             <input type="file" id="cameraInput" accept="image/*" capture="environment" 
                    style="opacity: 0; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; cursor: pointer;" 
                    onchange="processarImagem(this)">
@@ -56,50 +55,70 @@
                 <div class="bg-yellow-100 p-4 rounded-full text-yellow-600">
                     <i data-lucide="camera" size="48"></i>
                 </div>
-                <span class="font-bold text-lg">Escanear Comanda</span>
-                <p class="text-xs text-gray-500">Toque aqui para fotografar</p>
+                <span class="font-bold text-lg">Ler Comanda</span>
+                <p class="text-xs text-gray-500">Foto da impressora ou tela</p>
             </div>
         </div>
 
-        <!-- Status de Processamento -->
+        <!-- Loading -->
         <div id="status-ocr" class="hidden mb-4 p-4 bg-blue-100 rounded-lg text-center border border-blue-200">
             <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 mb-2 mx-auto"></div>
-            <p class="text-sm text-blue-800 font-bold animate-pulse" id="status-texto">Lendo comanda...</p>
+            <p class="text-sm text-blue-800 font-bold animate-pulse" id="status-texto">Melhorando imagem e lendo...</p>
         </div>
 
-        <!-- Lista de Pedidos em Produção -->
+        <!-- Lista Em Produção -->
         <h2 class="font-bold text-gray-700 mb-2 flex items-center gap-2 px-1">
             <i data-lucide="flame" class="text-orange-500"></i> Em Produção
         </h2>
         <div id="lista-producao" class="space-y-3 mb-8 min-h-[100px]">
-            <!-- Itens inseridos via JS -->
-            <p class="text-center text-gray-400 text-sm py-8 bg-white rounded-lg shadow-sm">Nenhum pedido no forno.</p>
+            <!-- JS preenche aqui -->
         </div>
 
     </main>
 
-    <!-- Modal de Detalhes do Pedido -->
-    <div id="modal-pedido" class="fixed inset-0 bg-black bg-opacity-60 hidden z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-white rounded-xl w-full max-w-md p-5 shadow-2xl transform transition-all scale-100">
-            <h3 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2" id="modal-titulo">Confirmar Dados</h3>
+    <!-- Modal Editar/Salvar Pedido -->
+    <div id="modal-pedido" class="fixed inset-0 bg-black bg-opacity-70 hidden z-[60] flex items-end sm:items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-white rounded-xl w-full max-w-md p-5 shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 class="text-xl font-bold text-gray-800" id="modal-titulo">Confirmar</h3>
+                <button onclick="fecharModal('modal-pedido')" class="text-gray-500"><i data-lucide="x"></i></button>
+            </div>
             
             <form id="form-pedido" onsubmit="salvarPedido(event)">
-                <input type="hidden" id="pedido-id-interno">
-                <input type="hidden" id="pedido-acao">
+                <input type="hidden" id="pedido-id-interno"> <!-- Index do array (-1 se novo) -->
+                <input type="hidden" id="pedido-acao"> <!-- start ou stop -->
+                <input type="hidden" id="data-inicio-real"> <!-- Para manter a data original ao editar -->
 
-                <div class="grid gap-4 mb-6">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nº Pedido</label>
-                        <input type="tel" id="inp-numero" class="w-full border-2 border-gray-200 p-3 rounded-lg text-lg font-bold focus:border-yellow-500 outline-none" placeholder="1234" required>
+                <div class="grid gap-4 mb-4">
+                    <!-- Numero e Hora Plataforma -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nº Pedido</label>
+                            <input type="tel" id="inp-numero" class="w-full border-2 border-gray-200 p-3 rounded-lg text-lg font-bold focus:border-yellow-500 outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Hora Plataforma</label>
+                            <input type="time" id="inp-hora-plat" class="w-full border p-3 rounded-lg bg-gray-50">
+                        </div>
                     </div>
+
+                    <!-- Responsável (Editável) -->
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Responsável</label>
+                        <select id="inp-responsavel" class="w-full border p-3 rounded-lg bg-white font-semibold text-gray-700">
+                            <!-- JS popula -->
+                        </select>
+                    </div>
+
+                    <!-- Sabor e Tamanho -->
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Sabor</label>
-                            <input type="text" id="inp-sabor" class="w-full border p-2 rounded-lg" placeholder="Ex: Calabresa" required>
+                            <input type="text" id="inp-sabor" class="w-full border p-3 rounded-lg" placeholder="Ex: Calabresa" required>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Tamanho</label>
-                            <select id="inp-tamanho" class="w-full border p-2 rounded-lg bg-white">
+                            <select id="inp-tamanho" class="w-full border p-3 rounded-lg bg-white h-[50px]">
                                 <option value="Grande">Grande</option>
                                 <option value="Média">Média</option>
                                 <option value="Pequena">Pequena</option>
@@ -108,100 +127,104 @@
                             </select>
                         </div>
                     </div>
+
+                    <!-- Ocorrência -->
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Ocorrências (Opcional)</label>
-                        <textarea id="inp-ocorrencia" class="w-full border p-2 rounded-lg text-sm" rows="2" placeholder="Ex: Atraso, Borda queimada..."></textarea>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Ocorrências / Obs</label>
+                        <textarea id="inp-ocorrencia" class="w-full border p-2 rounded-lg text-sm" rows="2"></textarea>
                     </div>
                 </div>
 
+                <!-- Botões de Ação -->
                 <div class="flex gap-3">
-                    <button type="button" onclick="fecharModal('modal-pedido')" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300">Cancelar</button>
-                    <button type="submit" class="flex-1 bg-yellow-600 text-white py-3 rounded-lg font-bold shadow-md hover:bg-yellow-700">Confirmar</button>
+                    <button type="submit" class="flex-1 bg-yellow-600 text-white py-3 rounded-lg font-bold shadow-md hover:bg-yellow-700 text-lg">Confirmar</button>
                 </div>
+                
+                <!-- Botão Excluir (Só aparece se estiver editando) -->
+                <button type="button" id="btn-excluir" onclick="excluirPedidoAtual()" class="hidden w-full mt-3 text-red-500 border border-red-200 py-2 rounded-lg text-sm font-bold">
+                    <i data-lucide="trash-2" class="inline w-4 h-4 mr-1"></i> Excluir este pedido
+                </button>
             </form>
         </div>
     </div>
 
-    <!-- Modal Configurações/Relatórios -->
+    <!-- Modal Configurações -->
     <div id="modal-config" class="fixed inset-0 bg-black bg-opacity-60 hidden z-[60] flex items-end sm:items-center justify-center backdrop-blur-sm">
-        <div class="bg-white rounded-t-2xl sm:rounded-xl w-full max-w-md p-6 h-[85vh] sm:h-auto overflow-y-auto shadow-2xl">
+        <div class="bg-white rounded-t-2xl sm:rounded-xl w-full max-w-md p-6 h-[85vh] sm:h-auto overflow-y-auto">
             <div class="flex justify-between items-center mb-6">
-                <h3 class="text-xl font-bold text-gray-800">Menu & Relatórios</h3>
+                <h3 class="text-xl font-bold">Menu & Relatórios</h3>
                 <button onclick="fecharModal('modal-config')" class="bg-gray-100 p-2 rounded-full"><i data-lucide="x"></i></button>
             </div>
 
+            <!-- Cadastro de Colaboradores -->
             <div class="mb-6 bg-gray-50 p-4 rounded-lg border">
-                <label class="block text-sm font-bold mb-2 text-gray-600">Quem está usando?</label>
-                <div class="flex gap-2 mb-2">
-                    <select id="select-colaborador" class="w-full border p-2 rounded-lg bg-white" onchange="mudarColaborador()">
+                <label class="block text-sm font-bold mb-2">Seu nome:</label>
+                <div class="flex gap-2">
+                    <select id="select-colaborador-config" class="w-full border p-2 rounded-lg bg-white" onchange="mudarColaboradorGlobal(this.value)">
                         <option value="">Selecione...</option>
                     </select>
                 </div>
-                <div class="flex gap-2">
-                    <input type="text" id="novo-colaborador" placeholder="Novo nome" class="border p-2 rounded-lg flex-1 text-sm">
+                <div class="flex gap-2 mt-2">
+                    <input type="text" id="novo-colaborador" placeholder="Novo nome..." class="border p-2 rounded-lg flex-1 text-sm">
                     <button onclick="addColaborador()" class="bg-green-600 text-white px-4 rounded-lg text-sm font-bold">Add</button>
                 </div>
             </div>
 
-            <hr class="my-4 border-gray-200">
+            <hr class="my-4">
 
-            <div>
-                <h4 class="font-bold mb-3 flex items-center gap-2"><i data-lucide="bar-chart"></i> Relatório do Dia</h4>
-                <div class="grid grid-cols-2 gap-3 text-center mb-4">
-                    <div class="bg-yellow-50 p-3 rounded-xl border border-yellow-100">
-                        <span class="block text-3xl font-bold text-yellow-600" id="rel-total">0</span>
-                        <span class="text-xs text-gray-500 font-bold uppercase">Pizzas Hoje</span>
-                    </div>
-                    <div class="bg-blue-50 p-3 rounded-xl border border-blue-100">
-                        <span class="block text-3xl font-bold text-blue-600" id="rel-media">0m</span>
-                        <span class="text-xs text-gray-500 font-bold uppercase">Tempo Médio</span>
-                    </div>
+            <!-- Relatórios -->
+            <h4 class="font-bold mb-3">Resumo do Dia</h4>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div class="bg-yellow-50 p-3 rounded-xl border border-yellow-100 text-center">
+                    <span class="block text-2xl font-bold text-yellow-600" id="rel-total">0</span>
+                    <span class="text-xs text-gray-500 font-bold uppercase">Pizzas</span>
                 </div>
-                
-                <h5 class="text-xs font-bold text-gray-400 uppercase mb-2">Últimos Pedidos Finalizados</h5>
-                <ul id="lista-historico" class="text-sm space-y-2 mb-6 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded border">
-                    <!-- Histórico -->
-                    <li class="text-center text-gray-400 text-xs">Nenhum pedido finalizado hoje.</li>
-                </ul>
-
-                <button onclick="enviarWhatsapp()" class="w-full bg-green-500 active:bg-green-600 text-white p-4 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg transition-colors">
-                    <i data-lucide="message-circle"></i> Enviar no WhatsApp
-                </button>
-                
-                <button onclick="limparDados()" class="mt-6 text-red-500 text-xs w-full text-center py-2 border border-red-100 rounded hover:bg-red-50">Limpar histórico do aparelho</button>
+                <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
+                    <span class="block text-2xl font-bold text-blue-600" id="rel-media">0m</span>
+                    <span class="text-xs text-gray-500 font-bold uppercase">Tempo Médio</span>
+                </div>
             </div>
+
+            <h5 class="text-xs font-bold text-gray-400 uppercase mb-2">Histórico (Hoje)</h5>
+            <ul id="lista-historico" class="text-sm space-y-2 mb-6 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded border"></ul>
+
+            <button onclick="enviarWhatsapp()" class="w-full bg-green-500 text-white p-4 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg">
+                <i data-lucide="message-circle"></i> Enviar Relatório
+            </button>
+            
+            <button onclick="limparDados()" class="mt-6 text-red-500 text-xs w-full text-center py-2 underline">Limpar memória do App</button>
         </div>
     </div>
 
-    <!-- Barra de Navegação Inferior -->
-    <nav class="fixed bottom-0 w-full bg-white border-t border-gray-200 flex justify-around p-2 z-40 pb-safe">
-        <button onclick="fecharModal('modal-config')" class="text-yellow-600 flex flex-col items-center p-2 flex-1 active:bg-gray-50">
+    <!-- Navegação -->
+    <nav class="fixed bottom-0 w-full bg-white border-t border-gray-200 flex justify-around p-2 z-40 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
+        <button onclick="fecharModal('modal-config')" class="text-yellow-600 flex flex-col items-center p-2 flex-1">
             <i data-lucide="home"></i>
             <span class="text-[10px] font-bold mt-1">Produção</span>
         </button>
-        <button onclick="mostrarConfig()" class="text-gray-400 flex flex-col items-center p-2 flex-1 active:bg-gray-50 hover:text-gray-600">
+        <button onclick="mostrarConfig()" class="text-gray-400 flex flex-col items-center p-2 flex-1">
             <i data-lucide="bar-chart-2"></i>
             <span class="text-[10px] font-bold mt-1">Relatórios</span>
         </button>
     </nav>
 
     <script>
-        // --- 1. Estado e Inicialização ---
+        // --- 1. Estado e Configuração ---
         let db = {
             colaboradores: JSON.parse(localStorage.getItem('saturnino_colaboradores')) || ['Pizzaiolo 1', 'Pizzaiolo 2'],
-            pedidosEmAndamento: JSON.parse(localStorage.getItem('saturnino_andamento')) || [],
-            historico: JSON.parse(localStorage.getItem('saturnino_historico')) || [],
-            colaboradorAtual: localStorage.getItem('saturnino_atual') || ''
+            producao: JSON.parse(localStorage.getItem('saturnino_producao')) || [], // Pedidos em andamento
+            historico: JSON.parse(localStorage.getItem('saturnino_historico')) || [], // Pedidos finalizados
+            usuarioAtual: localStorage.getItem('saturnino_atual') || ''
         };
 
-        // Inicializa ícones e tela
+        // Inicializar
         lucide.createIcons();
         atualizarUI();
 
-        // --- 2. Funções de OCR e Processamento ---
+        // --- 2. Processamento de Imagem Avançado (O SEGREDO) ---
         async function processarImagem(input) {
-            if (!db.colaboradorAtual) {
-                alert("⚠️ Selecione quem está produzindo antes de começar!");
+            if (!db.usuarioAtual) {
+                alert("⚠️ Por favor, selecione seu nome na engrenagem antes de começar.");
                 mostrarConfig();
                 input.value = ""; 
                 return;
@@ -210,49 +233,101 @@
             const file = input.files[0];
             if (!file) return;
 
-            // UI Loading
             document.getElementById('status-ocr').classList.remove('hidden');
-            document.getElementById('status-texto').innerText = "Processando imagem...";
-
+            
             try {
+                // Passo A: Pré-processamento (Converter para Alto Contraste)
+                const imagemProcessada = await aplicarFiltroBinarizacao(file);
+                
+                // Passo B: OCR com Tesseract
                 const worker = await Tesseract.createWorker('por');
-                const ret = await worker.recognize(file);
+                // Configura para aceitar apenas caracteres úteis, evita lixo
+                await worker.setParameters({
+                    tessedit_char_whitelist: '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ:-/.,# '
+                });
+                
+                const ret = await worker.recognize(imagemProcessada);
                 await worker.terminate();
                 
-                const textoExtraido = ret.data.text;
-                
-                // Regex melhorado para comandas
-                let numeroPedido = extrairNumeroPedido(textoExtraido);
-                let sabor = ""; 
-                let tamanho = extrairTamanho(textoExtraido);
+                const texto = ret.data.text;
+                console.log("Texto Lido:", texto);
 
-                // Verifica se é START ou STOP
-                const index = db.pedidosEmAndamento.findIndex(p => p.numero == numeroPedido);
-                
-                abrirModalConfirmacao(index, numeroPedido, sabor, tamanho);
+                // Passo C: Extração de Dados
+                const numero = extrairNumero(texto);
+                const horaPlat = extrairHora(texto);
+                const tamanho = extrairTamanho(texto);
+
+                // Passo D: Decidir Ação (Start ou Stop)
+                const index = db.producao.findIndex(p => p.numero == numero);
+                abrirModalPedido(index, numero, horaPlat, tamanho, "");
 
             } catch (err) {
                 console.error(err);
-                alert("Não foi possível ler a imagem. Digite manualmente.");
-                abrirModalConfirmacao(-1, "", "", ""); 
+                alert("Erro na leitura. Preencha manualmente.");
+                abrirModalPedido(-1, "", "", "", "");
             } finally {
                 document.getElementById('status-ocr').classList.add('hidden');
-                input.value = ""; // Reset input para permitir nova foto igual
+                input.value = "";
             }
         }
 
-        function extrairNumeroPedido(texto) {
-            // Remove espaços extras
-            texto = texto.replace(/\s+/g, ' ');
-            // Tenta achar padrões: "Pedido 1234", "#1234", "Senha 1234"
-            const regex = /(?:pedido|senha|cupom|nº|#)[:\s]*(\d{3,5})/i;
-            const match = texto.match(regex);
+        // Transforma imagem colorida em Preto e Branco puro para melhorar leitura
+        function aplicarFiltroBinarizacao(file) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.getElementById('canvas-ocr');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Redimensiona se for muito grande (ajuda performance)
+                    const scale = Math.min(1000 / img.width, 1);
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
+                    
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    // Pega pixels
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imageData.data;
+                    
+                    // Algoritmo simples de limiar (Threshold)
+                    for (let i = 0; i < data.length; i += 4) {
+                        const media = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                        const cor = media < 150 ? 0 : 255; // Se for cinza escuro vira preto, senão branco
+                        data[i] = data[i + 1] = data[i + 2] = cor;
+                    }
+                    
+                    ctx.putImageData(imageData, 0, 0);
+                    resolve(canvas.toDataURL('image/jpeg'));
+                };
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        function extrairNumero(texto) {
+            // Remove espaços e procura padrões
+            const limpo = texto.replace(/\s+/g, '');
+            // Prioridade: Padrões comuns de delivery
+            const regexPrioridade = /(?:pedido|senha|cupom|nº|#)[:\.-]*(\d{3,5})/i;
+            const match = texto.match(regexPrioridade);
             if (match) return match[1];
             
-            // Fallback: Primeiro número grande isolado
-            const regexNum = /\b\d{3,5}\b/;
-            const matchNum = texto.match(regexNum);
-            return matchNum ? matchNum[0] : "";
+            // Tentativa bruta: numeros isolados
+            const regexBruto = /\b\d{4}\b/; 
+            const matchBruto = texto.match(regexBruto);
+            return matchBruto ? matchBruto[0] : "";
+        }
+
+        function extrairHora(texto) {
+            // Procura HH:MM
+            const regexHora = /(\d{1,2}:\d{2})/;
+            const match = texto.match(regexHora);
+            if (match) {
+                // Valida se é uma hora real
+                const [h, m] = match[1].split(':');
+                if (parseInt(h) < 24 && parseInt(m) < 60) return match[1];
+            }
+            return "";
         }
 
         function extrairTamanho(texto) {
@@ -265,121 +340,161 @@
             return "Grande";
         }
 
-        // --- 3. Lógica de UI (Modais e Formulários) ---
-        function abrirModalConfirmacao(indexExistente, numero, sabor, tamanho) {
+        // --- 3. Lógica de UI e CRUD ---
+        
+        function abrirModalPedido(index, numero, horaPlat, tamanho, sabor) {
             const modal = document.getElementById('modal-pedido');
             const titulo = document.getElementById('modal-titulo');
-            const inpNum = document.getElementById('inp-numero');
-            const inpSabor = document.getElementById('inp-sabor');
-            const inpTam = document.getElementById('inp-tamanho');
+            const btnExcluir = document.getElementById('btn-excluir');
             
-            inpNum.value = numero || '';
-            inpSabor.value = sabor || '';
-            if(tamanho) inpTam.value = tamanho;
+            // Popula select de responsáveis
+            const selResp = document.getElementById('inp-responsavel');
+            selResp.innerHTML = '';
+            db.colaboradores.forEach(c => {
+                selResp.innerHTML += `<option value="${c}">${c}</option>`;
+            });
 
-            document.getElementById('pedido-id-interno').value = indexExistente;
-
-            if (indexExistente > -1) {
-                titulo.innerText = "✅ Finalizar Pedido";
-                document.getElementById('pedido-acao').value = 'stop';
-                const dadosSalvos = db.pedidosEmAndamento[indexExistente];
-                inpSabor.value = dadosSalvos.sabor;
-                inpTam.value = dadosSalvos.tamanho;
-                inpNum.readOnly = true; 
-                inpNum.classList.add('bg-gray-100');
-            } else {
+            document.getElementById('pedido-id-interno').value = index;
+            document.getElementById('inp-numero').value = numero || '';
+            document.getElementById('inp-tamanho').value = tamanho || 'Grande';
+            
+            // Se for novo (Start)
+            if (index === -1) {
                 titulo.innerText = "🔥 Iniciar Produção";
                 document.getElementById('pedido-acao').value = 'start';
-                inpNum.readOnly = false;
-                inpNum.classList.remove('bg-gray-100');
+                document.getElementById('data-inicio-real').value = new Date().toISOString();
+                document.getElementById('inp-sabor').value = '';
+                document.getElementById('inp-ocorrencia').value = '';
+                document.getElementById('inp-hora-plat').value = horaPlat || dayjs().format('HH:mm');
+                selResp.value = db.usuarioAtual; // Padrão é quem está logado
+                btnExcluir.classList.add('hidden');
+                
+                // Libera edição total
+                document.getElementById('inp-numero').readOnly = false;
+            } 
+            // Se for existente (Stop ou Edição)
+            else {
+                const p = db.producao[index];
+                titulo.innerText = "✅ Finalizar / Editar";
+                document.getElementById('pedido-acao').value = 'stop'; // Padrão é finalizar, mas pode só salvar edição
+                document.getElementById('data-inicio-real').value = p.inicio;
+                
+                document.getElementById('inp-numero').value = p.numero;
+                document.getElementById('inp-sabor').value = p.sabor;
+                document.getElementById('inp-tamanho').value = p.tamanho;
+                document.getElementById('inp-hora-plat').value = p.horaPlataforma || '';
+                document.getElementById('inp-ocorrencia').value = p.ocorrencia || '';
+                selResp.value = p.colaborador;
+                
+                btnExcluir.classList.remove('hidden');
             }
 
             modal.classList.remove('hidden');
         }
 
-        function fecharModal(id) {
-            document.getElementById(id).classList.add('hidden');
-        }
-
         function salvarPedido(e) {
             e.preventDefault();
+            const index = parseInt(document.getElementById('pedido-id-interno').value);
             const numero = document.getElementById('inp-numero').value;
             const sabor = document.getElementById('inp-sabor').value;
             const tamanho = document.getElementById('inp-tamanho').value;
+            const responsavel = document.getElementById('inp-responsavel').value;
+            const horaPlat = document.getElementById('inp-hora-plat').value;
             const ocorrencia = document.getElementById('inp-ocorrencia').value;
-            const acao = document.getElementById('pedido-acao').value;
-            const index = document.getElementById('pedido-id-interno').value;
-            
-            const agora = new Date();
+            const inicioReal = document.getElementById('data-inicio-real').value;
 
-            if (acao === 'start') {
-                const duplicado = db.pedidosEmAndamento.find(p => p.numero == numero);
-                if(duplicado) {
-                    alert("Esse pedido já está em produção!");
+            // Se é novo
+            if (index === -1) {
+                // Verifica duplicidade
+                if (db.producao.some(p => p.numero == numero)) {
+                    alert("Este pedido já está na lista de produção!");
                     return;
                 }
-
-                const novoPedido = {
-                    numero,
-                    sabor,
-                    tamanho,
-                    inicio: agora.toISOString(),
-                    colaborador: db.colaboradorAtual,
-                    ocorrencia
-                };
-                db.pedidosEmAndamento.push(novoPedido);
+                db.producao.push({
+                    numero, sabor, tamanho, colaborador: responsavel,
+                    horaPlataforma: horaPlat, ocorrencia, inicio: inicioReal
+                });
             } else {
-                const pedido = db.pedidosEmAndamento[index];
-                const inicio = new Date(pedido.inicio);
-                const diffMs = agora - inicio; 
-                const diffMin = Math.round(diffMs / 60000);
+                // É uma edição ou finalização? 
+                // A lógica aqui é: Se clicou no botão principal do form, finaliza.
+                // Mas se quisermos apenas editar, teríamos que ter outro botão.
+                // Simplificação: Se abriu modal de item existente -> FINALIZA e move p/ histórico.
+                // *Melhoria*: Vamos perguntar se é para "Apenas Salvar Edição" ou "Finalizar Produção"?
+                // Para manter simples: Vamos finalizar. Se o usuário quiser só editar, ele deleta e faz de novo ou adicionamos botão extra.
+                // VAMOS ADOTAR: Sempre finaliza. Se errou, edita no historico (futuro) ou exclui.
+                
+                const agora = new Date();
+                const inicio = new Date(inicioReal);
+                const diffMin = Math.round((agora - inicio) / 60000) || 1;
 
-                const finalizado = {
-                    ...pedido,
-                    fim: agora.toISOString(),
-                    duracaoMinutos: diffMin || 1, // Mínimo 1 min
-                    ocorrencia: ocorrencia ? (pedido.ocorrencia ? pedido.ocorrencia + " | " + ocorrencia : ocorrencia) : pedido.ocorrencia
-                };
+                db.historico.push({
+                    numero, sabor, tamanho, colaborador: responsavel,
+                    horaPlataforma: horaPlat, ocorrencia, 
+                    inicio: inicioReal, fim: agora.toISOString(),
+                    duracaoMinutos: diffMin
+                });
 
-                db.historico.push(finalizado);
-                db.pedidosEmAndamento.splice(index, 1);
+                // Remove da produção
+                db.producao.splice(index, 1);
             }
 
             salvarBanco();
             atualizarUI();
             fecharModal('modal-pedido');
-            document.getElementById('form-pedido').reset();
         }
 
-        // --- 4. Persistência e Atualização ---
-        function salvarBanco() {
-            localStorage.setItem('saturnino_andamento', JSON.stringify(db.pedidosEmAndamento));
-            localStorage.setItem('saturnino_historico', JSON.stringify(db.historico));
-            localStorage.setItem('saturnino_colaboradores', JSON.stringify(db.colaboradores));
-            localStorage.setItem('saturnino_atual', db.colaboradorAtual);
-        }
-
-        function atualizarUI() {
-            const displayColab = document.getElementById('colaborador-display');
-            displayColab.innerText = db.colaboradorAtual ? `Olá, ${db.colaboradorAtual}` : 'Toque na engrenagem para entrar';
+        // Função extra para apenas editar dados de um pedido EM PRODUÇÃO sem finalizar
+        function editarPedidoEmProducao(index) {
+            // Abre o modal normalmente, mas precisamos mudar o comportamento do botão "Confirmar"
+            // Por simplicidade neste código único, recomendamos excluir e criar de novo se errou muito,
+            // ou finalizar e assumir.
+            // Mas vamos adicionar suporte visual no card.
+            const p = db.producao[index];
+            abrirModalPedido(index, p.numero, p.horaPlataforma, p.tamanho, p.sabor);
             
+            // Truque: Mudar texto do botão para indicar que vai finalizar
+            // Ou podemos adicionar um flag. Por enquanto, fluxo padrão: Modal = Finalizar.
+        }
+
+        function excluirPedidoAtual() {
+            const index = parseInt(document.getElementById('pedido-id-interno').value);
+            if (confirm("Tem certeza que deseja excluir este pedido da produção?")) {
+                db.producao.splice(index, 1);
+                salvarBanco();
+                atualizarUI();
+                fecharModal('modal-pedido');
+            }
+        }
+
+        // --- 4. Renderização ---
+        function atualizarUI() {
+            // Header
+            const disp = document.getElementById('colaborador-display');
+            disp.innerText = db.usuarioAtual ? `Olá, ${db.usuarioAtual}` : 'Toque na engrenagem';
+
+            // Lista Produção
             const lista = document.getElementById('lista-producao');
             lista.innerHTML = '';
-            
-            if (db.pedidosEmAndamento.length === 0) {
-                lista.innerHTML = '<div class="text-center text-gray-400 text-sm py-8 bg-white rounded-lg border border-gray-100 shadow-sm flex flex-col items-center gap-2"><i data-lucide="chef-hat"></i><span>Nenhum pedido no forno.</span></div>';
+
+            if (db.producao.length === 0) {
+                lista.innerHTML = '<div class="text-center text-gray-400 py-8 bg-white rounded-xl border border-dashed border-gray-300">Nenhum pedido no forno.</div>';
             } else {
-                db.pedidosEmAndamento.forEach(p => {
-                    const horaInicio = dayjs(p.inicio).format('HH:mm');
+                db.producao.forEach((p, idx) => {
+                    const horaIni = dayjs(p.inicio).format('HH:mm');
                     lista.innerHTML += `
-                        <div class="bg-white p-4 rounded-lg shadow-md border-l-4 border-yellow-500 flex justify-between items-center relative overflow-hidden">
-                            <div class="z-10">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center relative overflow-hidden" onclick="editarPedidoEmProducao(${idx})">
+                            <div class="border-l-4 border-yellow-500 pl-3">
                                 <span class="font-black text-xl text-gray-800">#${p.numero}</span>
                                 <p class="text-sm font-bold text-gray-600">${p.sabor}</p>
-                                <p class="text-xs text-gray-400 mt-1">${p.tamanho} • ${horaInicio} • ${p.colaborador}</p>
+                                <div class="text-xs text-gray-400 mt-1 flex gap-2">
+                                    <span>🕒 Pedido: ${p.horaPlataforma || '--:--'}</span>
+                                    <span>🔥 Início: ${horaIni}</span>
+                                </div>
+                                <p class="text-xs text-blue-600 font-bold mt-1">👨‍🍳 ${p.colaborador}</p>
                             </div>
-                            <div class="text-orange-500 bg-orange-50 px-3 py-1 rounded-full text-xs font-bold animate-pulse flex items-center gap-1">
-                                <i data-lucide="flame" size="14"></i> Assando
+                            <div class="flex flex-col items-center gap-2">
+                                <span class="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded font-bold animate-pulse">Assando</span>
+                                <button class="text-gray-300 hover:text-yellow-600"><i data-lucide="edit-3" size="20"></i></button>
                             </div>
                         </div>
                     `;
@@ -389,124 +504,105 @@
             atualizarRelatorios();
         }
 
-        // --- 5. Relatórios e Configurações ---
-        function mostrarConfig() {
-            const modal = document.getElementById('modal-config');
-            const select = document.getElementById('select-colaborador');
-            
-            select.innerHTML = '<option value="">Selecione...</option>';
-            db.colaboradores.forEach(c => {
-                select.innerHTML += `<option value="${c}" ${c === db.colaboradorAtual ? 'selected' : ''}>${c}</option>`;
-            });
-
-            modal.classList.remove('hidden');
-            atualizarRelatorios();
+        // --- 5. Persistência ---
+        function salvarBanco() {
+            localStorage.setItem('saturnino_producao', JSON.stringify(db.producao));
+            localStorage.setItem('saturnino_historico', JSON.stringify(db.historico));
+            localStorage.setItem('saturnino_colaboradores', JSON.stringify(db.colaboradores));
+            localStorage.setItem('saturnino_atual', db.usuarioAtual);
         }
 
-        function mudarColaborador() {
-            const select = document.getElementById('select-colaborador');
-            db.colaboradorAtual = select.value;
+        function mudarColaboradorGlobal(nome) {
+            db.usuarioAtual = nome;
             salvarBanco();
             atualizarUI();
         }
 
         function addColaborador() {
             const nome = document.getElementById('novo-colaborador').value;
-            if (nome) {
+            if (nome && !db.colaboradores.includes(nome)) {
                 db.colaboradores.push(nome);
-                document.getElementById('novo-colaborador').value = '';
                 salvarBanco();
-                mostrarConfig(); 
+                mostrarConfig();
+                document.getElementById('novo-colaborador').value = '';
             }
         }
 
+        function mostrarConfig() {
+            const modal = document.getElementById('modal-config');
+            const sel = document.getElementById('select-colaborador-config');
+            sel.innerHTML = '<option value="">Selecione...</option>';
+            db.colaboradores.forEach(c => {
+                sel.innerHTML += `<option value="${c}" ${c === db.usuarioAtual ? 'selected' : ''}>${c}</option>`;
+            });
+            modal.classList.remove('hidden');
+            atualizarRelatorios();
+        }
+
+        function fecharModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        // --- 6. Relatórios ---
         function atualizarRelatorios() {
             const hoje = dayjs().format('YYYY-MM-DD');
-            const historicoHoje = db.historico.filter(p => dayjs(p.fim).format('YYYY-MM-DD') === hoje);
-
-            document.getElementById('rel-total').innerText = historicoHoje.length;
-
-            let somaTempo = 0;
-            const listaHist = document.getElementById('lista-historico');
-            listaHist.innerHTML = '';
-
-            if(historicoHoje.length === 0) {
-                 listaHist.innerHTML = '<li class="text-center text-gray-400 text-xs py-2">Nenhum pedido finalizado hoje.</li>';
-            } else {
-                // Mostra os últimos 5
-                historicoHoje.slice().reverse().forEach(p => {
-                    somaTempo += p.duracaoMinutos;
-                    listaHist.innerHTML += `
-                        <li class="border-b border-gray-100 py-2 flex justify-between items-center last:border-0">
-                            <div>
-                                <span class="block font-bold text-gray-700">#${p.numero} - ${p.sabor}</span>
-                                <span class="text-[10px] text-gray-400">${dayjs(p.fim).format('HH:mm')} • ${p.colaborador}</span>
-                            </div>
-                            <span class="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs">${p.duracaoMinutos} min</span>
-                        </li>
-                    `;
-                });
-            }
-
-            const media = historicoHoje.length ? Math.round(somaTempo / historicoHoje.length) : 0;
+            const histHoje = db.historico.filter(p => dayjs(p.fim).format('YYYY-MM-DD') === hoje);
+            
+            document.getElementById('rel-total').innerText = histHoje.length;
+            
+            const totalMin = histHoje.reduce((acc, curr) => acc + curr.duracaoMinutos, 0);
+            const media = histHoje.length ? Math.round(totalMin / histHoje.length) : 0;
             document.getElementById('rel-media').innerText = media + 'm';
+
+            const lista = document.getElementById('lista-historico');
+            lista.innerHTML = '';
+            histHoje.slice().reverse().forEach(p => {
+                lista.innerHTML += `
+                    <li class="border-b border-gray-200 py-2 flex justify-between">
+                        <div>
+                            <span class="font-bold text-xs">#${p.numero} - ${p.sabor}</span>
+                            <div class="text-[10px] text-gray-500">Resp: ${p.colaborador}</div>
+                        </div>
+                        <span class="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-1 rounded h-fit">${p.duracaoMinutos} min</span>
+                    </li>`;
+            });
         }
 
         function enviarWhatsapp() {
-            const hojeFormatado = dayjs().format('DD/MM/YYYY');
-            const hojeISO = dayjs().format('YYYY-MM-DD');
-            const historicoHoje = db.historico.filter(p => dayjs(p.fim).format('YYYY-MM-DD') === hojeISO);
+            const hoje = dayjs().format('DD/MM/YYYY');
+            const histHoje = db.historico.filter(p => dayjs(p.fim).format('YYYY-MM-DD') === dayjs().format('YYYY-MM-DD'));
             
-            if(historicoHoje.length === 0) {
-                alert("Nenhum dado para enviar hoje.");
-                return;
-            }
+            if (!histHoje.length) return alert("Sem dados hoje.");
 
-            let total = historicoHoje.length;
-            let somaTempo = 0;
-            let ocorrencias = [];
-            let sabores = {};
-
-            historicoHoje.forEach(p => {
-                somaTempo += p.duracaoMinutos;
-                if(p.ocorrencia) ocorrencias.push(`⚠️ Ped #${p.numero}: ${p.ocorrencia}`);
-                
-                if(!sabores[p.sabor]) sabores[p.sabor] = 0;
-                sabores[p.sabor]++;
+            let msg = `🍕 *SATURNINO - RELATÓRIO ${hoje}*\n\n`;
+            msg += `Total: *${histHoje.length} pizzas*\n`;
+            
+            // Agrupamento por Responsável
+            let porPizzaiolo = {};
+            histHoje.forEach(p => {
+                if(!porPizzaiolo[p.colaborador]) porPizzaiolo[p.colaborador] = 0;
+                porPizzaiolo[p.colaborador]++;
             });
 
-            const media = total ? Math.round(somaTempo / total) : 0;
-
-            let msg = `🍕 *RELATÓRIO SATURNINO - ${hojeFormatado}* 🍕\n\n`;
-            msg += `📊 *Resumo:*\n`;
-            msg += `✅ Total Produzido: *${total} pizzas*\n`;
-            msg += `⏱️ Tempo Médio: *${media} min*\n`;
-            msg += `--------------------------------\n`;
-            
-            msg += `📋 *Por Sabor:*\n`;
-            for (const [sab, qtd] of Object.entries(sabores)) {
-                msg += `• ${sab}: ${qtd}\n`;
+            msg += `\n👨‍🍳 *Produção por Pizzaiolo:*\n`;
+            for(let [nome, qtd] of Object.entries(porPizzaiolo)) {
+                msg += `- ${nome}: ${qtd}\n`;
             }
 
-            if(ocorrencias.length > 0) {
-                msg += `\n--------------------------------\n`;
-                msg += `🚨 *Ocorrências:*\n`;
-                msg += ocorrencias.join('\n');
-            }
+            msg += `\n⚠️ *Ocorrências:*\n`;
+            let temOcorrencia = false;
+            histHoje.forEach(p => {
+                if(p.ocorrencia) {
+                    msg += `[#${p.numero}] ${p.ocorrencia}\n`;
+                    temOcorrencia = true;
+                }
+            });
+            if(!temOcorrencia) msg += "Nenhuma ocorrência registrada.\n";
 
-            msg += `\n_Gerado pelo App Saturnino_`;
-
-            const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-            window.open(url, '_blank');
+            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
         }
-        
+
         function limparDados() {
-            if(confirm("ATENÇÃO: Isso apagará todo o histórico deste celular. Deseja continuar?")) {
-                localStorage.clear();
-                location.reload();
-            }
+            if(confirm("Apagar tudo?")) { localStorage.clear(); location.reload(); }
         }
     </script>
 </body>
-
 </html>
